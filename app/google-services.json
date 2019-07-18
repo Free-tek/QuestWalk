@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "404438508378",
+    "firebase_url": "https://quest-walk.firebaseio.com",
+    "project_id": "quest-walk",
+    "storage_bucket": "quest-walk.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:404438508378:android:6cf45fb9102446b3",
+        "android_client_info": {
+          "package_name": "com.botosofttechnologies.questwalk"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "404438508378-abvb0a3dn0etnj8sferaudokng8u062n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.botosofttechnologies.questwalk",
+            "certificate_hash": "d07c518462929d160dde042757845ec03133481b"
+          }
+        },
+        {
+          "client_id": "404438508378-hmahrg7t43i7hnennphi6g125oboc3qi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEQwbfatSgSHtkE7xfy2jLVFL0PNyIPFk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "404438508378-hmahrg7t43i7hnennphi6g125oboc3qi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
