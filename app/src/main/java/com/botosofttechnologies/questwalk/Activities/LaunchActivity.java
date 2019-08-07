@@ -1,4 +1,4 @@
-package com.botosofttechnologies.questwalk;
+package com.botosofttechnologies.questwalk.Activities;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -7,10 +7,13 @@ import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
-import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.Button;
 
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.botosofttechnologies.questwalk.HomeWatcher;
+import com.botosofttechnologies.questwalk.R;
 import com.botosofttechnologies.questwalk.Service.MusicService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;

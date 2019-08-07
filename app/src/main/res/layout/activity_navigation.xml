@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.constraint.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <RelativeLayout
+ <RelativeLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/bg2"
-        android:id="@+id/layout">
+        android:id="@+id/layout"
+        >
 
         <ImageView
             android:id="@+id/drawBar"
@@ -30,7 +27,8 @@
             android:layout_marginTop="15dp"
             android:layout_alignLeft="@+id/taskBackground"
             android:layout_marginLeft="130dp"
-            android:layout_centerVertical="true"/>
+            android:layout_centerVertical="true"
+            android:visibility="visible"/>
 
 
 
@@ -250,7 +248,7 @@
         <TextView
             android:id="@+id/location1"
             android:layout_height="20dp"
-            android:layout_width="142dp"
+            android:layout_width="122dp"
             android:text=""
             android:textColor="@android:color/holo_orange_dark"
             android:layout_alignLeft="@+id/bullet1"
@@ -260,11 +258,11 @@
         <TextView
             android:id="@+id/distance1"
             android:layout_height="20dp"
-            android:layout_width="50dp"
+            android:layout_width="60dp"
             android:text=""
             android:textColor="@android:color/holo_orange_dark"
             android:layout_alignLeft="@+id/location1"
-            android:layout_marginLeft="145dp"
+            android:layout_marginLeft="125dp"
             android:layout_below="@+id/text"/>
 
 
@@ -294,7 +292,7 @@
         <TextView
             android:id="@+id/location2"
             android:layout_height="20dp"
-            android:layout_width="142dp"
+            android:layout_width="122dp"
             android:text=""
             android:textColor="@android:color/holo_orange_dark"
             android:layout_alignLeft="@+id/bullet2"
@@ -305,11 +303,11 @@
         <TextView
             android:id="@+id/distance2"
             android:layout_height="20dp"
-            android:layout_width="50dp"
+            android:layout_width="60dp"
             android:text=""
             android:textColor="@android:color/holo_orange_dark"
             android:layout_alignLeft="@+id/location2"
-            android:layout_marginLeft="145dp"
+            android:layout_marginLeft="125dp"
             android:layout_marginTop="20dp"
             android:layout_below="@+id/bullet1"/>
 
@@ -341,7 +339,7 @@
         <TextView
             android:id="@+id/location3"
             android:layout_height="20dp"
-            android:layout_width="142dp"
+            android:layout_width="122dp"
             android:text=""
             android:textColor="@android:color/holo_orange_dark"
             android:layout_alignLeft="@+id/bullet3"
@@ -352,11 +350,11 @@
         <TextView
             android:id="@+id/distance3"
             android:layout_height="20dp"
-            android:layout_width="50dp"
+            android:layout_width="60dp"
             android:text=""
             android:textColor="@android:color/holo_orange_dark"
             android:layout_alignLeft="@+id/location3"
-            android:layout_marginLeft="145dp"
+            android:layout_marginLeft="125dp"
             android:layout_marginTop="20dp"
             android:layout_below="@+id/bullet2"/>
 
@@ -389,8 +387,20 @@
             android:textColor="@android:color/white"
             android:textSize="10dp"/>
 
+    <VideoView
+        android:id="@+id/video"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="10dp"
+        android:layout_alignTop="@+id/totemBar"
+        android:layout_marginTop="3.5dp"
+        android:layout_marginBottom="20dp"
+        android:layout_above="@+id/drawBar"
+        android:layout_toLeftOf="@+id/taskBackground"
+        android:layout_marginRight="50dp"/>
 
-        <ImageView
+
+    <ImageView
             android:id="@+id/ad"
             android:layout_width="370dp"
             android:layout_height="280dp"
@@ -401,42 +411,22 @@
             android:layout_above="@+id/drawBar"
             android:layout_toLeftOf="@+id/taskBackground"
             android:layout_marginRight="50dp"
-            android:background="@drawable/ads_background" />
+            android:background="@drawable/ads_background"/>
 
 
-        <ImageView
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:id="@+id/next"
-            android:layout_marginTop="150dp"
-            android:src="@drawable/ic_navigate_before_black_24dp"
-            android:layout_marginLeft="10dp"
-            android:layout_alignLeft="@+id/ad"
-            />
 
-        <ImageView
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:id="@+id/previous"
-            android:layout_marginTop="150dp"
-            android:src="@drawable/ic_navigate_next_black_24dp"
-            android:layout_marginLeft="15dp"
-            android:layout_alignRight="@+id/ad"
-            android:layout_marginRight="10dp"
-            />
+
         <TextView
             android:id="@+id/adsText"
             android:layout_height="wrap_content"
             android:layout_width="wrap_content"
             android:layout_marginTop="150dp"
             android:layout_alignLeft="@+id/ad"
-            android:layout_marginLeft="130dp"
+            android:layout_marginLeft="100dp"
             android:text="No Ads Availble"
             android:textSize="14dp"
             android:textColor="@android:color/holo_orange_dark"/>
 
 
 
-    </RelativeLayout>
-
-</android.support.constraint.ConstraintLayout>
+</RelativeLayout>

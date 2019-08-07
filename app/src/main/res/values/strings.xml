@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Quest Walk</string>
+    <string name="title_activity_maps_view">Map</string>
+    <string name="map_style"></string>
 </resources>

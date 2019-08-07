@@ -1,10 +1,15 @@
-package com.botosofttechnologies.questwalk;
+package com.botosofttechnologies.questwalk.Activities;
 
 import android.Manifest;
+import android.annotation.TargetApi;
+import android.app.Activity;
+import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
@@ -12,14 +17,15 @@ import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.media.MediaPlayer;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -28,48 +34,75 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.fragment.app.DialogFragment;
+
+import com.botosofttechnologies.questwalk.HomeWatcher;
+import com.botosofttechnologies.questwalk.R;
 import com.botosofttechnologies.questwalk.Service.MusicService;
+import com.botosofttechnologies.questwalk.SharedPrefManager;
 import com.github.ybq.android.spinkit.style.Wave;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResult;
+import com.google.android.gms.location.LocationSettingsStatusCodes;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.Query;
 import com.google.firebase.database.ValueEventListener;
 import com.squareup.picasso.Picasso;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Random;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 
-public class NavigationActivity extends AppCompatActivity implements LocationListener {
+public class NavigationActivity extends AppCompatActivity implements LocationListener, GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener {
 
-    ImageView bar0, bar1, bar2, bar3, bar4, bar5, star0, star1, star2, star3, star4, star5, settings, signOut, next, previous, ad;
+
+    private static final String DIALOG_ERROR = "dialog_error";
+    private boolean mResolvingError = false;
+    private static final int REQUEST_RESOLVE_ERROR = 555;
+
+    int ACCESS_FINE_LOCATION_CODE = 3310;
+    int ACCESS_COARSE_LOCATION_CODE = 3410;
+    private GoogleApiClient mGoogleApiClient;
+
+
+    ImageView help, bar0, bar1, bar2, bar3, bar4, bar5, star0, star1, star2, star3, star4, star5, settings, signOut, ad;
     HomeWatcher mHomeWatcher;
-    TextView location1, location2, location3, distance1, distance2, distance3,  prize1, prize2, prize3, text, adsText;
+    TextView location1, location2, location3, distance1, distance2, distance3, prize1, prize2, prize3, text, adsText;
     Button viewMore;
     RelativeLayout layout;
+    VideoView video;
 
     private static FirebaseAuth mAuth = FirebaseAuth.getInstance();
     static FirebaseUser User = mAuth.getCurrentUser();
     static final String userID = User.getUid();
 
     LocationManager locationManager;
-    String provider, date, key;
+    String provider, date, key, prize, location, worth, description, image;
 
     FirebaseDatabase database;
     DatabaseReference user, tasks, ads;
@@ -84,18 +117,21 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
     Map<String, Double> distanceList = new HashMap<>();
     String $key;
     List<Double> rank = new ArrayList<Double>();
-    Double refDistance;
+    Double refDistance, taskaltitude;
     String mkey, $distance1, $distance2, $distance3, adName, $node;
-    int setAd, views, totem, vCount;
+    int setAd, views, totem, vCount, noWinners;
 
     ProgressBar progressBar;
+    ProgressDialog progress;
 
-
+    Thread t;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_navigation);
+        // Build Google API Client for Location related work
+        buildGoogleApiClient();
 
         setAd = 0;
 
@@ -111,6 +147,11 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
         ads = database.getReference("ads");
         user.child(userID).child("token").setValue(SharedPrefManager.getInstance(NavigationActivity.this).getToken());
 
+        //check if network is available to play game
+        if(!isNetworkAvailable()){
+            Toast.makeText(NavigationActivity.this, "No internet connection",
+                    Toast.LENGTH_SHORT).show();
+        }
 
 
         //Start HomeWatcher
@@ -122,6 +163,7 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                     mServ.pauseMusic();
                 }
             }
+
             @Override
             public void onHomeLongPressed() {
                 if (mServ != null) {
@@ -161,11 +203,9 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
             // to handle the case where the user grants the permission. See the documentation
             // for ActivityCompat#requestPermissions for more details.
 
-
-
             new AlertDialog.Builder(this)
                     .setTitle("Location Permission")
-                    .setMessage("We need to access your location so in order for us to point you towards the right direction where a treasure is")
+                    .setMessage("We need to access your location in order for us to point you towards the right direction where you can find a treasure")
                     .setPositiveButton("Okay", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialogInterface, int i) {
@@ -179,40 +219,276 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                     .show();
 
 
-
             return;
         } else {
             Location location = locationManager.getLastKnownLocation(provider);
 
-
             if (location != null) {
                 onLocationChanged(location);
             } else {
+
                 Location locationNetwork = locationManager
                         .getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
 
-                if(locationNetwork != null){
+                if (locationNetwork != null) {
                     onLocationChanged(locationNetwork);
-                }else{
+                } else {
+
                 }
 
 
             }
         }
 
-
-
-
-
-
-
-
-
     }
+
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager
+                = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
+    }
+
+
+
+
+    // When user first come to this activity we try to connect Google services for location and map related work
+    protected synchronized void buildGoogleApiClient() {
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
+    }
+
+    // Google Api Client is connected
+    @Override
+    public void onConnected(Bundle bundle) {
+        if (mGoogleApiClient.isConnected()) {
+            //if connected successfully show user the settings dialog to enable location from settings services
+            // If location services are enabled then get Location directly
+            // Else show options for enable or disable location services
+            settingsrequest();
+        }
+    }
+
+
+    // This is the method that will be called if user has disabled the location services in the device settings
+    // This will show a dialog asking user to enable location services or not
+    // If user tap on "Yes" it will directly enable the services without taking user to the device settings
+    // If user tap "No" it will just Finish the current Activity
+    public void settingsrequest() {
+        LocationRequest locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setInterval(30 * 1000);
+        locationRequest.setFastestInterval(5 * 1000);
+        LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder().addLocationRequest(locationRequest);
+        builder.setAlwaysShow(true); //this is the key ingredient
+
+        PendingResult<LocationSettingsResult> result = LocationServices.SettingsApi.checkLocationSettings(mGoogleApiClient, builder.build());
+        result.setResultCallback(new ResultCallback<LocationSettingsResult>() {
+            @Override
+            public void onResult(LocationSettingsResult result) {
+                final Status status = result.getStatus();
+                switch (status.getStatusCode()) {
+                    case LocationSettingsStatusCodes.SUCCESS:
+                        if (mGoogleApiClient.isConnected()) {
+
+                            // check if the device has OS Marshmellow or greater than
+                            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP_MR1) {
+                                if (ActivityCompat.checkSelfPermission(NavigationActivity.this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(NavigationActivity.this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                                    ActivityCompat.requestPermissions(NavigationActivity.this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, ACCESS_FINE_LOCATION_CODE);
+                                } else {
+                                    // get Location
+                                }
+                            } else {
+                                // get Location
+                            }
+
+                        }
+                        break;
+                    case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
+                        // Location settings are not satisfied. But could be fixed by showing the user
+                        // a dialog.
+                        try {
+                            // Show the dialog by calling startResolutionForResult(),
+                            // and check the result in onActivityResult().
+                            status.startResolutionForResult(NavigationActivity.this, REQUEST_RESOLVE_ERROR);
+                        } catch (IntentSender.SendIntentException e) {
+                            // Ignore the error.
+                        }
+                        break;
+                    case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
+                        // Location settings are not satisfied. However, we have no way to fix the
+                        // settings so we won't show the dialog.
+                        break;
+                }
+            }
+        });
+    }
+
+    // This method is called only on devices having installed Android version >= M (Marshmellow)
+    // This method is just to show the user options for allow or deny location services at runtime
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case 3310: {
+
+                if (grantResults.length > 0) {
+
+                    for (int i = 0, len = permissions.length; i < len; i++) {
+
+                        if (grantResults[i] == PackageManager.PERMISSION_DENIED) {
+                            // Show the user a dialog why you need location
+                        } else if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                            // get Location
+                        } else {
+                            this.finish();
+                        }
+                    }
+                }
+                return;
+            }
+        }
+    }
+
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_RESOLVE_ERROR) {
+            mResolvingError = false;
+            switch (resultCode) {
+                case Activity.RESULT_OK:
+                    // get location method
+
+                    if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        // TODO: Consider calling
+                        //    Activity#requestPermissions
+                        // here to request the missing permissions, and then overriding
+                        //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                        //                                          int[] grantResults)
+                        // to handle the case where the user grants the permission. See the documentation
+                        // for Activity#requestPermissions for more details.
+
+
+                        new AlertDialog.Builder(this)
+                                .setTitle("Location Permission")
+                                .setMessage("We need to access your location in order for us to point you towards the right direction where you can find a treasure")
+                                .setPositiveButton("Okay", new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialogInterface, int i) {
+                                        //Prompt the user once explanation has been shown
+                                        ActivityCompat.requestPermissions(NavigationActivity.this,
+                                                new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                                                MY_PERMISSIONS_REQUEST_LOCATION);
+                                    }
+                                })
+                                .create()
+                                .show();
+
+
+                        return;
+
+                    }else {
+                        Location location = locationManager.getLastKnownLocation(provider);
+
+
+                        if (location != null) {
+                            onLocationChanged(location);
+
+                        } else {
+                            Location locationNetwork = locationManager
+                                    .getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+                            if(locationNetwork != null){
+                                onLocationChanged(locationNetwork);
+
+                            }else{
+
+                            }
+
+
+                        }
+                    }
+
+
+                    break;
+                case Activity.RESULT_CANCELED:
+                    this.finish();
+                    break;
+            }
+        }
+    }
+
+
+    @Override
+    public void onConnectionSuspended(int i) {
+    }
+
+
+    // When there is an error connecting Google Services
+    @Override
+    public void onConnectionFailed(ConnectionResult result) {
+        if (mResolvingError) {
+            // Already attempting to resolve an error.
+            return;
+        } else if (result.hasResolution()) {
+            try {
+                mResolvingError = true;
+                result.startResolutionForResult(this, REQUEST_RESOLVE_ERROR);
+            } catch (IntentSender.SendIntentException e) {
+                // There was an error with the resolution intent. Try again.
+                mGoogleApiClient.connect();
+            }
+        } else {
+            // Show dialog using GoogleApiAvailability.getErrorDialog()
+            showErrorDialog(result.getErrorCode());
+            mResolvingError = true;
+        }
+    }
+
+
+    /* Creates a dialog for an error message */
+    private void showErrorDialog(int errorCode) {
+        // Create a fragment for the error dialog
+        ErrorDialogFragment dialogFragment = new ErrorDialogFragment();
+        // Pass the error that should be displayed
+        Bundle args = new Bundle();
+        args.putInt(DIALOG_ERROR, errorCode);
+        dialogFragment.setArguments(args);
+        dialogFragment.show(getSupportFragmentManager(), "errordialog");
+    }
+
+    /* Called from ErrorDialogFragment when the dialog is dismissed. */
+    public void onDialogDismissed() {
+        mResolvingError = false;
+    }
+
+    /* A fragment to display an error dialog */
+    public static class ErrorDialogFragment extends DialogFragment {
+        public ErrorDialogFragment() {
+        }
+
+        @Override
+        public Dialog onCreateDialog(Bundle savedInstanceState) {
+            // Get the error code and retrieve the appropriate dialog
+            int errorCode = this.getArguments().getInt(DIALOG_ERROR);
+            return GoogleApiAvailability.getInstance().getErrorDialog(
+                    this.getActivity(), errorCode, REQUEST_RESOLVE_ERROR);
+        }
+
+        @Override
+        public void onDismiss(DialogInterface dialog) {
+            //((LocationActivity) getActivity()).onDialogDismissed();
+        }
+    }
+
 
     private void initUi() {
 
-        bar2 = (ImageView) findViewById(R.id.bar2);
+
         star0 = (ImageView) findViewById(R.id.star0);
         star1 = (ImageView) findViewById(R.id.star1);
         star2 = (ImageView) findViewById(R.id.star2);
@@ -227,18 +503,15 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
         bar5 = (ImageView) findViewById(R.id.bar5);
 
         ad = (ImageView) findViewById(R.id.ad);
+        video = (VideoView) findViewById(R.id.video);
 
+        video.setVisibility(View.INVISIBLE);
 
         layout = (RelativeLayout) findViewById(R.id.layout);
 
         settings = (ImageView) findViewById(R.id.settings);
         signOut = (ImageView) findViewById(R.id.signOut);
-
-        next = (ImageView) findViewById(R.id.next);
-        previous = (ImageView) findViewById(R.id.previous);
-
-        next.setVisibility(View.INVISIBLE);
-        previous.setVisibility(View.INVISIBLE);
+        help = (ImageView) findViewById(R.id.help);
 
         adsText = (TextView) findViewById(R.id.adsText);
         adsText.setVisibility(View.INVISIBLE);
@@ -266,7 +539,7 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
         progressBar = (ProgressBar)findViewById(R.id.progress);
         Wave mWave = new Wave();
         mWave.setBounds(0,0,100,100);
-        mWave.setColor(R.color.colorAccent);
+        mWave.setColor(R.color.orange);
         progressBar.setIndeterminateDrawable(mWave);
 
 
@@ -274,6 +547,22 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
             @Override
             public void onClick(View v) {
 
+            }
+        });
+
+        help.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+
+        viewMore.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent Task = new Intent(NavigationActivity.this, TasksList.class);
+                startActivity(Task);
+                finish();
             }
         });
 
@@ -307,11 +596,45 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
         bar4.setVisibility(View.INVISIBLE);
         bar5.setVisibility(View.INVISIBLE);
 
+        signOut.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                final AlertDialog alertDialog = new AlertDialog.Builder(NavigationActivity.this).create();
+                alertDialog.setTitle("Proceed?");
+                alertDialog.setMessage("Do you want to proceed with sign out" );
+                alertDialog.setOnShowListener( new DialogInterface.OnShowListener() {
+                    @Override
+                    public void onShow(DialogInterface arg0) {
+                        alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(NavigationActivity.this.getResources().getColor(R.color.orange));
+                        alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(NavigationActivity.this.getResources().getColor(R.color.orange));
+                    }
+                });
+                alertDialog.setButton(AlertDialog.BUTTON_POSITIVE, "YES",
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                Intent signOut = new Intent (NavigationActivity.this, LoginActivity.class);
+                                //sign out
+                                signOut.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                FirebaseAuth.getInstance().signOut();
+                                startActivity(signOut);
+                            }
+                        });
+                alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE, "NO",new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                });
+
+                alertDialog.show();
+            }
+        });
 
         setTotem();
         setNearestTasks();
 
-        Thread t=new Thread(){
+        t=new Thread(){
 
 
             @Override
@@ -320,7 +643,7 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                 while(!isInterrupted()){
 
                     try {
-                        Thread.sleep(5000);  //1000ms = 1 sec
+                        Thread.sleep(10000);
 
                         runOnUiThread(new Runnable() {
 
@@ -342,6 +665,83 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
 
 
 
+        location1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "0");
+                startActivity(intent);
+            }
+
+        });
+        prize1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "0");
+                startActivity(intent);
+            }
+        });
+        distance1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "0");
+                startActivity(intent);
+            }
+        });
+
+        location2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "1");
+                startActivity(intent);
+            }
+        });
+        prize2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "1");
+                startActivity(intent);
+            }
+        });
+        distance2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "1");
+                startActivity(intent);
+            }
+        });
+
+        location3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "2");
+                startActivity(intent);
+            }
+        });
+        prize3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "2");
+                startActivity(intent);
+            }
+        });
+        distance3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(NavigationActivity.this, TaskClicked.class);
+                intent.putExtra("Key", "2");
+                startActivity(intent);
+            }
+        });
+
+
     }
 
     private void getAds(final int $setAd) {
@@ -351,18 +751,21 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                 if(dataSnapshot.exists()){
                     adscount = (int) dataSnapshot.getChildrenCount();
                     String imageUrl = String.valueOf(dataSnapshot.child(String.valueOf($setAd)).child("image").getValue());
+                    String adType = String.valueOf(dataSnapshot.child(String.valueOf($setAd)).child("type").getValue());
                     final String view = String.valueOf(dataSnapshot.child(String.valueOf($setAd)).child("view").getValue());
                     adName = String.valueOf(dataSnapshot.child(String.valueOf($setAd)).child("name").getValue());
                     $node = node();
 
 
-                    if(setAd == (adscount - 1)){
+                    if(setAd == (adscount - 1) && adType.equals("0")){
+                        video.setVisibility(View.INVISIBLE);
+                        ad.setVisibility(View.VISIBLE);
+
                         Picasso.with(ad.getContext())
                                 .load(imageUrl)
                                 .into(ad);
 
                         if(view.equals("false") || view == null){
-                            Toast.makeText(NavigationActivity.this, adName + "0:" + views, Toast.LENGTH_SHORT).show();
                             user.child(userID).child("ads").child(String.valueOf($setAd)).child("view").setValue("true");
 
 
@@ -372,21 +775,31 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                             }
 
 
-                            totem = totem + 1;
-                            ads.child(adName).child($node).setValue(userID);
-                            user.child(userID).child("totem").setValue(totem);
+                            new Handler().postDelayed(
+                                    new Runnable() {
+                                        public void run() {
+                                            totem = totem + 1;
+                                            ads.child(adName).child($node).setValue(userID);
+                                            user.child(userID).child("totem").setValue(totem);
+                                        }
+                                    },
+                                    6000);
+
+
 
 
                         }
                         setAd = 0;
-                    }else{
+                    }else if (adType.equals("0")){
+                        video.setVisibility(View.INVISIBLE);
+                        ad.setVisibility(View.VISIBLE);
+
                         Picasso.with(ad.getContext())
                                 .load(imageUrl)
                                 .into(ad);
 
                         if(view.equals("false") || view == null){
 
-                            Toast.makeText(NavigationActivity.this, adName + "0:" + views, Toast.LENGTH_SHORT).show();
                             user.child(userID).child("ads").child(String.valueOf($setAd)).child("view").setValue("true");
 
 
@@ -395,9 +808,74 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                             }
 
 
-                            totem = totem + 1;
-                            ads.child(adName).child($node).setValue(userID);
-                            user.child(userID).child("totem").setValue(totem);
+                            new Handler().postDelayed(
+                                    new Runnable() {
+                                        public void run() {
+                                            totem = totem + 1;
+                                            ads.child(adName).child($node).setValue(userID);
+                                            user.child(userID).child("totem").setValue(totem);
+                                        }
+                                    },
+                                    6000);
+
+                        }
+                        setAd++;
+                    }else if(setAd == (adscount - 1) && adType.equals("1")){
+                        //load Video
+                        video.setVisibility(View.VISIBLE);
+                        ad.setVisibility(View.INVISIBLE);
+
+                        loadvideo(imageUrl);
+
+                        if(view.equals("false") || view == null){
+                            user.child(userID).child("ads").child(String.valueOf($setAd)).child("view").setValue("true");
+
+
+
+                            if(totem == 5){
+                                totem  = 4;
+                            }
+
+
+                            new Handler().postDelayed(
+                                    new Runnable() {
+                                        public void run() {
+                                            totem = totem + 1;
+                                            ads.child(adName).child($node).setValue(userID);
+                                            user.child(userID).child("totem").setValue(totem);
+                                        }
+                                    },
+                                    6000);
+
+
+                        }
+                        setAd = 0;
+                    }else if(adType.equals("1")){
+                        //view video
+                        video.setVisibility(View.VISIBLE);
+                        ad.setVisibility(View.INVISIBLE);
+
+                        loadvideo(imageUrl);
+
+                        if(view.equals("false") || view == null){
+
+                            user.child(userID).child("ads").child(String.valueOf($setAd)).child("view").setValue("true");
+
+
+                            if(totem == 5){
+                                totem  = 4;
+                            }
+
+
+                            new Handler().postDelayed(
+                                    new Runnable() {
+                                        public void run() {
+                                            totem = totem + 1;
+                                            ads.child(adName).child($node).setValue(userID);
+                                            user.child(userID).child("totem").setValue(totem);
+                                        }
+                                    },
+                                    6000);
 
 
                         }
@@ -408,8 +886,6 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                 }else{
                     //no ads available
                     adsText.setVisibility(View.VISIBLE);
-                    next.setVisibility(View.INVISIBLE);
-                    previous.setVisibility(View.INVISIBLE);
                 }
             }
 
@@ -418,6 +894,48 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
 
             }
         });
+
+
+    }
+
+
+    private void loadvideo(String videoUrl){
+
+        video.setVisibility(View.VISIBLE);
+        ad.setVisibility(View.GONE);
+
+        try{
+            if(!video.isPlaying()){
+                Uri uri = Uri.parse(videoUrl);
+                video.setVideoURI(uri);
+                int length = video.getDuration();
+
+                video.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                    @Override
+                    public void onCompletion(MediaPlayer mediaPlayer) {
+
+                    }
+                });
+
+            }else{
+                video.pause();
+            }
+
+        }
+        catch (Exception ex){
+
+        }
+        video.requestFocus();
+        video.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+            @Override
+            public void onPrepared(MediaPlayer mediaPlayer) {
+                mediaPlayer.setLooping(true);
+                video.start();
+
+
+            }
+        });
+
 
 
     }
@@ -437,14 +955,31 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                         taskCount = (int) dataSnapshot.getChildrenCount();
                         int i;
                         for(i=0; i <taskCount; i++ ){
+
                             tasklng = Double.parseDouble((String.valueOf(dataSnapshot.child(String.valueOf(i)).child("lng").getValue())));
                             tasklat = Double.parseDouble((String.valueOf(dataSnapshot.child(String.valueOf(i)).child("lat").getValue())));
+                            prize = String.valueOf(dataSnapshot.child(String.valueOf(i)).child("prize").getValue());
+                            location = String.valueOf(dataSnapshot.child(String.valueOf(i)).child("location").getValue());
+                            description = String.valueOf(dataSnapshot.child(String.valueOf(i)).child("description").getValue());
+                            worth = String.valueOf(dataSnapshot.child(String.valueOf(i)).child("worth").getValue());
+                            image = String.valueOf(dataSnapshot.child(String.valueOf(i)).child("image").getValue());
+                            taskaltitude = Double.parseDouble(String.valueOf(dataSnapshot.child(String.valueOf(i)).child("altitude").getValue()));
+                            noWinners = Integer.parseInt(String.valueOf(dataSnapshot.child(String.valueOf(i)).child("noWinners").getValue()));
                             key = String.valueOf(i);
 
                             //get the distance
                             double distance = gdistance(tasklat, tasklng, userlat, userlng, "K");
 
                             user.child(userID).child("tasks").child(key).child("distance").setValue(distance);
+                            user.child(userID).child("tasks").child(key).child("lng").setValue(tasklng);
+                            user.child(userID).child("tasks").child(key).child("lat").setValue(tasklat);
+                            user.child(userID).child("tasks").child(key).child("prize").setValue(prize);
+                            user.child(userID).child("tasks").child(key).child("location").setValue(location);
+                            user.child(userID).child("tasks").child(key).child("description").setValue(description);
+                            user.child(userID).child("tasks").child(key).child("worth").setValue(worth);
+                            user.child(userID).child("tasks").child(key).child("altitude").setValue(taskaltitude);
+                            user.child(userID).child("tasks").child(key).child("image").setValue(image);
+                            user.child(userID).child("tasks").child(key).child("noWinners").setValue(noWinners);
 
                         }
                     }
@@ -473,9 +1008,10 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
                 $distance2 = String.valueOf(dataSnapshot.child("1").child("distance").getValue());
                 $distance3 = String.valueOf(dataSnapshot.child("2").child("distance").getValue());
 
-                $distance1 = "+" + $distance1 + "m";
-                $distance2 = "+" + $distance2 + "m";
-                $distance3 = "+" + $distance3 + "m";
+
+                $distance1 = "+" + $distance1.substring(0,$distance1.indexOf(".")+2) + "km";
+                $distance2 = "+" + $distance2.substring(0,$distance1.indexOf(".")+2) + "km";
+                $distance3 = "+" + $distance3.substring(0,$distance1.indexOf(".")+2) + "km";
 
                 tasks.addValueEventListener(new ValueEventListener() {
                     @Override
@@ -520,167 +1056,6 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
         });
 
 
-
-        /*Collections.sort(rank);
-        int j;
-        for(j=0; j<3; j++){
-            refDistance = rank.get(j);
-            user.child(userID).child("tasks").addValueEventListener(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                    taskCount = (int) dataSnapshot.getChildrenCount();
-                    int i;
-                    for(i=0; i <taskCount; i++ ){
-                        mkey = String.valueOf(i);
-                        double distance = (double) dataSnapshot.child(String.valueOf(i)).child("distance").getValue();
-                        if(refDistance == distance && i == 0){
-                            tasks.addValueEventListener(new ValueEventListener() {
-                                @Override
-                                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                                    String location = String.valueOf(dataSnapshot.child(mkey).child("location").getValue());
-                                    String prize = String.valueOf(dataSnapshot.child(mkey).child("prize").getValue());
-                                    location1.setText(location);
-                                    String $distance = String.valueOf(Math.round(refDistance));
-                                    distance1.setText($distance);
-                                    prize1.setText(prize);
-                                }
-
-                                @Override
-                                public void onCancelled(@NonNull DatabaseError databaseError) {
-
-                                }
-                            });
-                        }else if(refDistance == distance && i == 1){
-                            tasks.addValueEventListener(new ValueEventListener() {
-                                @Override
-                                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                                    String location = String.valueOf(dataSnapshot.child(mkey).child("location").getValue());
-                                    String prize = String.valueOf(dataSnapshot.child(mkey).child("prize").getValue());
-                                    location2.setText(location);
-                                    String $distance = String.valueOf(Math.round(refDistance));
-                                    distance2.setText($distance);
-                                    prize2.setText(prize);
-                                }
-
-                                @Override
-                                public void onCancelled(@NonNull DatabaseError databaseError) {
-
-                                }
-                            });
-                        }else if(refDistance == distance && i == 2){
-                            tasks.addValueEventListener(new ValueEventListener() {
-                                @Override
-                                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                                    String location = String.valueOf(dataSnapshot.child(mkey).child("location").getValue());
-                                    String prize = String.valueOf(dataSnapshot.child(mkey).child("prize").getValue());
-                                    location3.setText(location);
-                                    String $distance = String.valueOf(Math.round(refDistance));
-                                    distance3.setText($distance);
-                                    prize3.setText(prize);
-                                }
-
-                                @Override
-                                public void onCancelled(@NonNull DatabaseError databaseError) {
-
-                                }
-                            });
-                        }
-                    }
-                }
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError databaseError) {
-
-                }
-            });
-        }
-*/
-
-
-        /*List<Entry<String, Double>> sortedList = new ArrayList<Entry<String, Double>>(distanceList.entrySet());
-        Collections.sort(sortedList, new Comparator<Entry<String, Double>>() {
-
-            @Override
-            public int compare(Entry<String, Double> obj1, Entry<String, Double> obj2) {
-                return obj1.getValue().compareTo(obj2.getValue());
-
-            }
-
-        });
-
-        int size1 = distanceList.size();
-        int size2 = sortedList.size();
-        Log.i("size1", String.valueOf(size1));
-        Log.i("size2", String.valueOf(size2));
-
-        int i = 0;
-        for (Object e : sortedList) {
-            Toast.makeText(NavigationActivity.this, "method 3 done", Toast.LENGTH_SHORT).show();
-            if(i == 0){
-                $key = ((Map.Entry<String, Integer>) e).getKey();
-                distance = ((Map.Entry<String, Integer>) e).getValue();
-                tasks.addValueEventListener(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                        String location = String.valueOf(dataSnapshot.child($key).child("location").getValue());
-                        String prize = String.valueOf(dataSnapshot.child($key).child("prize").getValue());
-                        Toast.makeText(NavigationActivity.this, "method 1st value", Toast.LENGTH_SHORT).show();
-                        location1.setText(location);
-                        distance1.setText(distance);
-                        prize1.setText(prize);
-                    }
-
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError databaseError) {
-
-                    }
-                });
-                i++;
-            }else if(i == 1){
-                $key = ((Map.Entry<String, Integer>) e).getKey();
-                distance = ((Map.Entry<String, Integer>) e).getValue();
-                tasks.addValueEventListener(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                        String location = String.valueOf(dataSnapshot.child($key).child("location").getValue());
-                        String prize = String.valueOf(dataSnapshot.child($key).child("prize").getValue());
-                        Toast.makeText(NavigationActivity.this, "method 2nd value", Toast.LENGTH_SHORT).show();
-                        location2.setText(location);
-                        distance2.setText(distance);
-                        prize2.setText(prize);
-                    }
-
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError databaseError) {
-
-                    }
-                });
-                i++;
-            }else if(i == 2){
-                $key = ((Map.Entry<String, Integer>) e).getKey();
-                distance = ((Map.Entry<String, Integer>) e).getValue();
-                tasks.addValueEventListener(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                        String location = String.valueOf(dataSnapshot.child($key).child("location").getValue());
-                        String prize = String.valueOf(dataSnapshot.child($key).child("prize").getValue());
-
-                        location3.setText(location);
-                        distance3.setText(distance);
-                        prize3.setText(prize);
-                    }
-
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError databaseError) {
-
-                    }
-                });
-                i++;
-            }
-
-        }
-
-*/
 
     }
 
@@ -863,6 +1238,11 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
 
         }
 
+        if(!isNetworkAvailable()){
+            Toast.makeText(NavigationActivity.this, "No internet connection",
+                    Toast.LENGTH_SHORT).show();
+        }
+
 
     }
 
@@ -903,6 +1283,7 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
 
 
 
+
     }
 
 
@@ -927,7 +1308,7 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
             // for ActivityCompat#requestPermissions for more details.
             return;
         } else {
-            locationManager.requestLocationUpdates(provider,900000 , 10, NavigationActivity.this);
+            locationManager.requestLocationUpdates(provider,900000 , 3, NavigationActivity.this);
         }
 
     }
@@ -939,9 +1320,20 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
     @Override
     protected  void onStart() {
         super.onStart();
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.connect();
+        }
 
     }
 
+    // Stop the service when we are leaving this activity
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.disconnect();
+        }
+    }
 
     @Override
     public void onLocationChanged(Location location) {
@@ -950,6 +1342,8 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
         Double lat = location.getLatitude();
         Double lng = location.getLongitude();
         Double altitude = location.getAltitude();
+        float bearing = location.getBearing();
+
 
         Log.i("Location info: Lat", lat.toString());
         Log.i("Location info: Lng", lng.toString());
@@ -963,11 +1357,13 @@ public class NavigationActivity extends AppCompatActivity implements LocationLis
 
         DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         date = dateFormat.format(currentDate);
-
         user.child(userID).child("location").child("lng").setValue(String.valueOf(lng));
         user.child(userID).child("location").child("lat").setValue(String.valueOf(lat));
         user.child(userID).child("location").child("altitude").setValue(String.valueOf(altitude));
+        user.child(userID).child("location").child("bearing").setValue(String.valueOf(bearing));
         user.child(userID).child("location").child("date").setValue(date);
+
+        setNearestTasks();
 
     }
 

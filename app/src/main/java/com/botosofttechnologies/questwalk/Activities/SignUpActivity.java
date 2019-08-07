@@ -1,23 +1,26 @@
-package com.botosofttechnologies.questwalk;
+package com.botosofttechnologies.questwalk.Activities;
 
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.botosofttechnologies.questwalk.R;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
@@ -52,6 +55,8 @@ public class SignUpActivity extends AppCompatActivity {
         mAuth = FirebaseAuth.getInstance();
 
         initUi();
+
+
 
         usersID.addValueEventListener(new ValueEventListener() {
             @Override
@@ -102,7 +107,7 @@ public class SignUpActivity extends AppCompatActivity {
                     final String $email = String.valueOf(email.getText());
                     final String $password = String.valueOf(password.getText());
 
-                    AlertDialog alertDialog = new AlertDialog.Builder(SignUpActivity.this).create();
+                    final AlertDialog alertDialog = new AlertDialog.Builder(SignUpActivity.this).create();
                     alertDialog.setTitle("Terms and Conditions");
                     alertDialog.setMessage("*By using Quest Walk, you agree to allowing the app administrators send you ads ftrom time to time.\n"
 
@@ -130,9 +135,12 @@ public class SignUpActivity extends AppCompatActivity {
                                                         progressDialog.dismiss();
                                                         startActivity(intent);
                                                         finish();
+                                                    }else if(!isNetworkAvailable()){
+                                                        Toast.makeText(SignUpActivity.this, "Sign up failed, please check your internet connection",
+                                                                Toast.LENGTH_SHORT).show();
                                                     }else {
                                                         progressDialog.dismiss();
-                                                        Toast.makeText(SignUpActivity.this, "Sign up failed, please check your network and try again",
+                                                        Toast.makeText(SignUpActivity.this, " please try again",
                                                                 Toast.LENGTH_SHORT).show();
                                                     }
                                                 }
@@ -151,6 +159,14 @@ public class SignUpActivity extends AppCompatActivity {
 
                             });
 
+                    alertDialog.setOnShowListener( new DialogInterface.OnShowListener() {
+                        @Override
+                        public void onShow(DialogInterface arg0) {
+                            alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(SignUpActivity.this.getResources().getColor(R.color.orange));
+                            alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(SignUpActivity.this.getResources().getColor(R.color.orange));
+                        }
+                    });
+
 
                     alertDialog.show();
 
@@ -158,6 +174,13 @@ public class SignUpActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager
+                = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
     }
 
     private void saveData() {
@@ -179,6 +202,8 @@ public class SignUpActivity extends AppCompatActivity {
         userId.child("age").setValue($age);
         userId.child("username").setValue($username);
         userId.child("totem").setValue(0);
+        userId.child("activeTasks").setValue("false");
+        userId.child("nameEnteredTasks").setValue("");
 
         //lets create a new node on firebase containing each user email as parent and their userID as a child
 
